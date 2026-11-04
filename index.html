@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AR Virtual Try-On | Katalog Aksesori Wajah</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Custom Style -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Import Maps for Three.js & MindAR -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "mindar-face-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-three.prod.js"
+    }
+  }
+  </script>
+</head>
+<body class="bg-slate-950 text-white font-['Plus_Jakarta_Sans'] select-none overflow-hidden touch-none">
+
+  <!-- AR VIEW CONTAINER (Kamera & 3D Canvas di sini) -->
+  <div id="ar-container" class="absolute inset-0 w-full h-full z-0 bg-black"></div>
+
+  <!-- UI OVERLAY LAYER (Bersih, Minimal, Tidak Menghalangi Wajah) -->
+  <div id="ui-layer" class="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none p-4 pb-5">
+    
+    <!-- TOP BAR (Status & Tombol Aksi) -->
+    <header class="flex items-center justify-between pointer-events-auto w-full max-w-lg mx-auto">
+      <!-- Live Status Pill (Tidak di tengah wajah, melainkan di pojok atas) -->
+      <div id="tracking-badge" class="flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-700/60 shadow-lg text-xs transition-all duration-300">
+        <span id="tracking-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="tracking-text" class="text-slate-200 font-semibold tracking-wide">Mencari Wajah...</span>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center space-x-2">
+        <button id="btn-info" class="p-2.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-slate-200 hover:text-white shadow-lg active:scale-95 transition" title="Tentang Project">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        <button id="btn-adjust" class="flex items-center space-x-1.5 px-3 py-2 rounded-full bg-indigo-600/90 hover:bg-indigo-600 backdrop-blur-md border border-indigo-400/50 text-white shadow-lg shadow-indigo-500/25 active:scale-95 transition" title="Atur Ukuran & Posisi">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+          </svg>
+          <span class="text-xs font-bold">Kalibrasi</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- AREA TENGAH: DIBIARKAN 100% KOSONG SUPAYA WAJAH TIDAK TERTUTUP APAPUN -->
+    <div class="flex-1 pointer-events-none"></div>
+
+    <!-- BOTTOM BAR KONTROL KATALOG (Floating Modern Card mirip Filter Instagram/TikTok) -->
+    <div class="pointer-events-auto flex flex-col items-center space-y-2.5 w-full max-w-md mx-auto">
+      
+      <!-- FLOATING PRODUCT PILL TOAST (Ringkas & Informatif) -->
+      <div id="product-card" class="bg-slate-900/85 backdrop-blur-xl border border-slate-700/60 rounded-full px-4 py-1.5 shadow-xl flex items-center space-x-2 text-xs transition-all">
+        <span id="product-badge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Trending 🔥</span>
+        <span id="product-name" class="font-bold text-white truncate max-w-[160px]">Kacamata Pixel "Deal With It"</span>
+        <span class="text-slate-500">•</span>
+        <span id="product-price" class="font-extrabold text-emerald-400">Rp 99.000</span>
+      </div>
+
+      <!-- BOTTOM CONTROL SHEET -->
+      <div class="w-full bg-slate-900/90 backdrop-blur-2xl border border-slate-800 rounded-3xl p-3 shadow-2xl flex flex-col space-y-2.5">
+        
+        <!-- Tab Kategori -->
+        <div class="flex space-x-1.5 p-1 bg-slate-950/70 rounded-2xl">
+          <button id="tab-glasses" class="flex-1 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 text-white shadow transition-all">👓 Kacamata</button>
+          <button id="tab-hats" class="flex-1 py-1.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition-all">👒 Topi</button>
+          <button id="tab-both" class="flex-1 py-1.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition-all">✨ Combo</button>
+        </div>
+
+        <!-- Carousel Pilihan Item -->
+        <div id="items-carousel" class="flex space-x-2 overflow-x-auto pb-1 scrollbar-none justify-center">
+          <!-- Di-generate via JavaScript -->
+        </div>
+
+        <!-- Tombol Shutter Ambil Foto (Besar & Ikonik di Tengah) -->
+        <div class="flex items-center justify-center pt-1">
+          <button id="btn-snapshot" class="w-14 h-14 rounded-full border-4 border-white/80 p-1 flex items-center justify-center shadow-xl shadow-indigo-500/20 active:scale-90 transition group" title="Ambil Foto AR">
+            <span class="w-full h-full rounded-full bg-white group-active:scale-90 transition-transform"></span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DRAWER / MODAL KALIBRASI SLIDER (Bisa Disesuaikan Live) -->
+  <div id="adjust-panel" class="hidden fixed inset-x-4 bottom-24 max-w-md mx-auto z-40 bg-slate-900/95 backdrop-blur-2xl border-2 border-indigo-500/50 rounded-3xl p-4 shadow-2xl space-y-3 text-xs animate-in fade-in zoom-in-95">
+    <div class="flex items-center justify-between font-bold text-slate-200 border-b border-slate-800 pb-2">
+      <div class="flex items-center space-x-1.5">
+        <span class="text-indigo-400 text-sm">⚙️</span>
+        <span class="text-sm">Kalibrasi Live</span>
+        <span id="adjust-target-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 ml-1">👓 Kacamata</span>
+      </div>
+      <button id="btn-close-adjust" class="w-7 h-7 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold">&times;</button>
+    </div>
+
+    <div class="space-y-3">
+      <!-- Slider Ukuran & Presets -->
+      <div>
+        <div class="flex justify-between text-slate-300 font-semibold mb-1">
+          <span>🔍 Ukuran (Scale)</span>
+          <span id="label-scale" class="text-indigo-400 font-mono font-bold">1.00x</span>
+        </div>
+        <input type="range" id="slider-scale" min="0.2" max="10.0" step="0.1" value="1.0" class="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg">
+        <div class="flex space-x-1.5 mt-1.5">
+          <button id="btn-scale-1x" type="button" class="flex-1 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 active:scale-95 transition">1x Normal</button>
+          <button id="btn-scale-2x" type="button" class="flex-1 py-1 bg-indigo-900/60 hover:bg-indigo-800 rounded-lg text-[10px] font-bold text-indigo-300 border border-indigo-700/50 active:scale-95 transition">2x Besar</button>
+          <button id="btn-scale-3x" type="button" class="flex-1 py-1 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-[10px] font-bold text-white shadow active:scale-95 transition">3x Jumbo</button>
+          <button id="btn-scale-5x" type="button" class="flex-1 py-1 bg-violet-600 hover:bg-violet-500 rounded-lg text-[10px] font-bold text-white shadow active:scale-95 transition">5x Raksasa</button>
+        </div>
+      </div>
+
+      <!-- Slider Naik / Turun (Y) -->
+      <div>
+        <div class="flex justify-between text-slate-300 font-semibold mb-1">
+          <span>↕️ Posisi Naik / Turun (Y)</span>
+          <span id="label-pos-y" class="text-indigo-400 font-mono font-bold">0.00</span>
+        </div>
+        <input type="range" id="slider-pos-y" min="-1.0" max="1.0" step="0.02" value="0.0" class="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg">
+      </div>
+
+      <!-- Slider Maju / Mundur (Z) -->
+      <div>
+        <div class="flex justify-between text-slate-300 font-semibold mb-1">
+          <span>↔️ Posisi Maju / Mundur (Z)</span>
+          <span id="label-pos-z" class="text-indigo-400 font-mono font-bold">0.00</span>
+        </div>
+        <input type="range" id="slider-pos-z" min="-0.8" max="0.8" step="0.02" value="0.0" class="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg">
+      </div>
+
+      <!-- Slider Rotasi Hadap (Rotasi Y) -->
+      <div>
+        <div class="flex justify-between text-slate-300 font-semibold mb-1">
+          <span>🔄 Putar Hadap Kiri / Kanan (Y)</span>
+          <span id="label-rot-y" class="text-indigo-400 font-mono font-bold">0°</span>
+        </div>
+        <input type="range" id="slider-rot-y" min="-180" max="180" step="5" value="0" class="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg">
+      </div>
+
+      <!-- Slider Kemiringan / Tilt (Rotasi X) -->
+      <div>
+        <div class="flex justify-between text-slate-300 font-semibold mb-1">
+          <span>📐 Kemiringan Depan / Belakang (X)</span>
+          <span id="label-rot-x" class="text-indigo-400 font-mono font-bold">0°</span>
+        </div>
+        <input type="range" id="slider-rot-x" min="-90" max="90" step="5" value="0" class="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg">
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex space-x-2 pt-1 border-t border-slate-800">
+        <button id="btn-flip-180" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl active:scale-95 transition text-[11px]">
+          🔄 Balik Arah 180°
+        </button>
+        <button id="btn-reset-adjust" class="flex-1 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-bold rounded-xl active:scale-95 transition text-[11px]">
+          ↺ Reset Default
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- START / WELCOME MODAL -->
+  <div id="start-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center shadow-2xl space-y-5">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 mx-auto flex items-center justify-center shadow-lg shadow-indigo-500/25">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      </div>
+
+      <div>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">AR Innovation Project 2026</span>
+        <h1 class="text-xl font-extrabold text-white mt-2">AR Virtual Try-On</h1>
+        <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+          Katalog interaktif kacamata & topi berbasis WebAR. Pastikan mengizinkan akses kamera depan untuk mencoba produk.
+        </p>
+      </div>
+
+      <div class="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3 text-left space-y-2 text-xs text-slate-300">
+        <div class="flex items-center space-x-2">
+          <span class="text-indigo-400 font-bold">✓</span>
+          <span>Face Tracking otomatis 3D</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="text-indigo-400 font-bold">✓</span>
+          <span>Katalog produk & varian interaktif</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="text-indigo-400 font-bold">✓</span>
+          <span>Bisa ambil foto (snapshot)</span>
+        </div>
+      </div>
+
+      <button id="btn-start" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 font-bold text-sm text-white shadow-lg shadow-indigo-500/30 active:scale-95 transition-all">
+        Buka Kamera & Mulai Try-On 🚀
+      </button>
+    </div>
+  </div>
+
+  <!-- LOADING SPINNER MODAL -->
+  <div id="loading-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-center flex flex-col items-center space-y-3">
+      <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <p id="loading-text" class="text-xs font-semibold text-slate-200">Menyiapkan modul AI & kamera...</p>
+    </div>
+  </div>
+
+  <!-- SNAPSHOT PREVIEW MODAL -->
+  <div id="snapshot-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-4 text-center shadow-2xl space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white">📸 Hasil Try-On</h3>
+        <button id="btn-close-snapshot" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <div class="rounded-2xl overflow-hidden border border-slate-800 bg-black aspect-[3/4] flex items-center justify-center">
+        <img id="snapshot-image" src="" alt="Snapshot" class="w-full h-full object-cover">
+      </div>
+      <div class="flex space-x-2">
+        <a id="btn-download-snapshot" href="#" download="ar-tryon-photo.png" class="flex-1 py-2.5 rounded-xl bg-indigo-600 font-semibold text-xs text-white text-center shadow active:scale-95 transition">
+          Simpan Foto 💾
+        </a>
+        <button id="btn-retake-snapshot" class="py-2.5 px-4 rounded-xl bg-slate-800 font-semibold text-xs text-slate-300 active:scale-95 transition">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO & ABOUT MODAL -->
+  <div id="info-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 text-left shadow-2xl space-y-3.5">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-sm font-bold text-white">Tentang Project</h3>
+        <button id="btn-close-info" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+        <p><strong>Mata Kuliah:</strong> Augmented Reality dan Virtual Reality (2026)</p>
+        <p><strong>Project 6:</strong> AR Virtual Try-On / Katalog Produk</p>
+        <p><strong>Teknologi:</strong> WebAR (MindAR Face Tracking), Three.js, glTF / GLB Loader, Tailwind CSS.</p>
+        <p><strong>Fitur:</strong> Live 468-point Face Landmarks, Multi-product Switch (Kacamata & Topi), Positional Offset Calibration, Foto Snapshot.</p>
+      </div>
+      <button id="btn-confirm-info" class="w-full py-2.5 rounded-xl bg-indigo-600 font-semibold text-xs text-white">
+        Tutup
+      </button>
+    </div>
+  </div>
+
+  <!-- Main JavaScript File -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>
